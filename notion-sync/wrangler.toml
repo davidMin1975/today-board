@@ -1,0 +1,15 @@
+name = "today-board-notion-sync"
+main = "src/worker.js"
+compatibility_date = "2024-09-23"
+workers_dev = true
+
+[vars]
+# 할일 DB / 일정 DB ID (시크릿 아님 — 공개돼도 무방)
+TODO_DB = "a3f4897d-7022-475e-bfc7-3ff20a2c6a3a"
+SCHED_DB = "86fccaac-3fc6-49fa-8089-dcfed6e8fb53"
+# 대시보드 오리진 (CORS 허용 대상). 커스텀 도메인 쓰면 변경.
+ALLOW_ORIGIN = "https://davidmin1975.github.io"
+
+# ── 시크릿은 wrangler로 별도 등록 (wrangler.toml 에 넣지 말 것) ──
+#   npx wrangler secret put NOTION_TOKEN   ← Notion 내부 통합 토큰 (필수)
+#   npx wrangler secret put SYNC_KEY       ← 임의 문자열 (선택, 권장)
