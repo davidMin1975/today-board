@@ -335,6 +335,17 @@ document.addEventListener('alpine:init', () => {
         this.seed();
       }
       this.migrate();
+      // 보드 재구성(구역 보기·통합 업무 동기화) 1회 마이그레이션: 낡은 필터/보기 상태 정리
+      try {
+        if (localStorage.getItem('today-board.migrated') !== 'v2') {
+          this.kanbanGroup = 'section';
+          this.fCat = 'all';
+          this.fPrio = 'all';
+          this.search = '';
+          this.showDone = false;
+          localStorage.setItem('today-board.migrated', 'v2');
+        }
+      } catch (e) {}
       this.loadTg();
       this.loadSync();
 
