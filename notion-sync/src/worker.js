@@ -119,7 +119,7 @@ async function optionalQueryAll(env, dbId, filter, sorts, label) {
     return { pages: await queryAll(env, dbId, filter, sorts), warning: '' };
   } catch (e) {
     // 선택 원본의 권한·스키마 문제는 기존 할일·일정 동기화를 중단시키지 않는다.
-    return { pages: [], warning: `${label} 접근 필요` };
+    return { pages: [], warning: `${label}: ${String(e.message || e).slice(0, 200)}` };
   }
 }
 

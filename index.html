@@ -286,7 +286,8 @@ document.addEventListener('alpine:init', () => {
 
     search: '',
     sort: 'due',
-    kanbanGroup: 'status',
+    kanbanGroup: 'section',
+    showDone: false,
     showArchive: false,
     dragId: null,
     dragCol: null,
@@ -322,7 +323,7 @@ document.addEventListener('alpine:init', () => {
 
     backup: { open: false, tab: 'export', text: '', paste: '', copied: false, error: '' },
     tg: { token: '', chat: '', status: '', sending: false },
-    sync: { url: '', key: '', auto: false, busy: false, status: '', lastAt: null },
+    sync: { url: '', key: '', auto: false, busy: false, status: '', lastAt: null, lastOk: null, state: 'idle' },
 
     /* ---------- lifecycle ---------- */
     init() {
@@ -348,7 +349,7 @@ document.addEventListener('alpine:init', () => {
 
       this._iv = setInterval(() => { this.now = new Date(); }, 1000);
 
-      ['goal', 'view', 'fPrio', 'fCat', 'sort', 'kanbanGroup', 'tasks', 'systems', 'links']
+      ['goal', 'view', 'fPrio', 'fCat', 'sort', 'kanbanGroup', 'showDone', 'tasks', 'systems', 'links']
         .forEach(k => this.$watch(k, () => this.save()));
     },
 
@@ -393,12 +394,12 @@ document.addEventListener('alpine:init', () => {
     snapshot() {
       return {
         v: 1, goal: this.goal, view: this.view, fPrio: this.fPrio, fCat: this.fCat,
-        sort: this.sort, kanbanGroup: this.kanbanGroup,
+        sort: this.sort, kanbanGroup: this.kanbanGroup, showDone: this.showDone,
         tasks: this.tasks, systems: this.systems, links: this.links,
       };
     },
     apply(d) {
-      ['goal', 'view', 'fPrio', 'fCat', 'sort', 'kanbanGroup', 'tasks', 'systems', 'links']
+      ['goal', 'view', 'fPrio', 'fCat', 'sort', 'kanbanGroup', 'showDone', 'tasks', 'systems', 'links']
         .forEach(k => { if (d[k] !== undefined && d[k] !== null) this[k] = d[k]; });
     },
     save() {
@@ -561,24 +562,57 @@ document.addEventListener('alpine:init', () => {
       const cm = this.catMeta(t.cat);
       return (t.title + ' ' + cm.label + ' ' + cm.short + ' ' + t.prio).toLowerCase().includes(q);
     },
+    _todayMs() { const d = new Date(); d.setHours(0, 0, 0, 0); return d.getTime(); },
+    _dueMs(t) { return t.due ? new Date(t.due + 'T00:00:00').getTime() : null; },
     boardTasks() {
       return this.tasks.filter(t =>
         !this.isArchived(t) &&
+        (this.showDone || !t.done) &&
         (this.fPrio === 'all' || t.prio === this.fPrio) &&
         (this.fCat === 'all' || t.cat === this.fCat) &&
         this.matchSearch(t));
     },
+    // §7 정렬: 기한초과 → 오늘마감 → P1 → 마감임박(7일) → P2 → P3 → 마감일없음, 동일하면 마감일 빠른 순
+    sortRank(t) {
+      if (t.done) return 90;
+      const t0 = this._todayMs(), d = this._dueMs(t);
+      if (d !== null && d < t0) return 0;
+      if (d !== null && d === t0) return 1;
+      if (t.prio === 'P1') return 2;
+      if (d !== null && d <= t0 + 7 * 86400000) return 3;
+      if (t.prio === 'P2') return 4;
+      if (t.prio === 'P3') return 5;
+      if (d === null) return 7;
+      return 6;
+    },
     sortTasks(arr) {
-      const a = [...arr], R = (x) => this.prioRank(x.prio);
       const byDue = (x, y) => String(x.due || '9999-99-99').localeCompare(String(y.due || '9999-99-99'));
-      if (this.sort === 'created') a.sort((x, y) => (x.done - y.done) || (y.createdAt || 0) - (x.createdAt || 0));
-      else if (this.sort === 'prio') a.sort((x, y) => (x.done - y.done) || R(x) - R(y) || byDue(x, y));
-      else a.sort((x, y) => (x.done - y.done) || byDue(x, y) || R(x) - R(y));
-      return a;
+      return [...arr].sort((x, y) =>
+        this.sortRank(x) - this.sortRank(y) || byDue(x, y) || this.prioRank(x.prio) - this.prioRank(y.prio));
+    },
+
+    /* §8 업무 구역 (중복 없이 한 곳에만 배치) */
+    SECTIONS: [
+      { key: 'today',   label: '🔴 오늘 반드시 처리', hint: '기한 초과 · 오늘 마감 · P1', color: 'var(--p1)' },
+      { key: 'soon',    label: '🟠 기한 임박',        hint: '7일 이내 마감',            color: 'var(--warn)' },
+      { key: 'doing',   label: '🟡 진행 중',          hint: '상태 진행 중',             color: 'var(--accent)' },
+      { key: 'reply',   label: '🔵 회신 / 고객 후속', hint: '업무구분 고객 회신 · 영업 후속', color: 'var(--bid)' },
+      { key: 'waiting', label: '⚪ 대기 / 향후',       hint: '나머지 시작 전',           color: 'var(--ink-faint)' },
+    ],
+    sectionOf(t) {
+      if (t.done) return null;
+      const t0 = this._todayMs(), d = this._dueMs(t);
+      if ((d !== null && d <= t0) || t.prio === 'P1') return 'today';
+      if (d !== null && d <= t0 + 7 * 86400000) return 'soon';
+      if (t.status === 'doing') return 'doing';
+      if (t.workType === '고객 회신' || t.workType === '영업 후속') return 'reply';
+      return 'waiting';
     },
 
     /* kanban grouping */
     groupCols() {
+      if (this.kanbanGroup === 'section')
+        return this.SECTIONS.map(s => ({ key: s.key, label: s.label, hint: s.hint, color: s.color }));
       if (this.kanbanGroup === 'prio')
         return [
           { key: 'P1', label: 'P1 · 긴급', color: 'var(--p1)' },
@@ -594,6 +628,7 @@ document.addEventListener('alpine:init', () => {
       ];
     },
     colKeyOf(t) {
+      if (this.kanbanGroup === 'section') return this.sectionOf(t);
       if (this.kanbanGroup === 'prio') return t.prio;
       if (this.kanbanGroup === 'cat') return t.cat;
       return t.status || 'todo';
@@ -840,8 +875,10 @@ document.addEventListener('alpine:init', () => {
           this.sync.key = d.key || '';
           this.sync.auto = !!d.auto;
           this.sync.lastAt = d.lastAt || null;
+          this.sync.lastOk = d.lastOk || null;
         }
       } catch (e) {}
+      this.sync.state = this.sync.url ? (this.sync.lastOk ? 'ok' : 'idle') : 'idle';
     },
     saveSync() {
       try {
@@ -850,6 +887,7 @@ document.addEventListener('alpine:init', () => {
           key: (this.sync.key || '').trim(),
           auto: !!this.sync.auto,
           lastAt: this.sync.lastAt,
+          lastOk: this.sync.lastOk,
         }));
       } catch (e) {}
     },
@@ -859,10 +897,11 @@ document.addEventListener('alpine:init', () => {
     async syncNotion(opts) {
       opts = opts || {};
       const base = (this.sync.url || '').trim().replace(/\/+$/, '');
-      if (!base) { this.sync.status = 'Worker URL을 입력하세요.'; return; }
+      if (!base) { this.sync.status = 'Worker URL을 입력하세요.'; this.sync.state = 'config'; return; }
       if (this.sync.busy) return;
       this.saveSync();
       this.sync.busy = true;
+      this.sync.state = 'syncing';
       this.sync.status = '동기화 중…';
       const qs = this._syncQS();
       const first = !this.sync.lastAt;
@@ -898,17 +937,33 @@ document.addEventListener('alpine:init', () => {
         const applied = this.mergeNotion(gj, first);
 
         this.sync.lastAt = Date.now();
+        this.sync.lastOk = Date.now();
+        this.sync.state = 'ok';
         this.saveSync();
         const warnings = Array.isArray(gj.warnings) ? gj.warnings.filter(Boolean) : [];
-        this.sync.status = `완료 ✓ ${new Date().toLocaleTimeString('ko-KR')} · 할일 ${(gj.tasks || []).length} · 일정 ${(gj.sched || []).length}` +
+        this.sync.status = `완료 ✓ ${new Date().toLocaleTimeString('ko-KR')} · 업무 ${(gj.tasks || []).length} · 일정 ${(gj.sched || []).length}` +
           (applied.added ? ` · +${applied.added}` : '') + (applied.archived ? ` · 보관 ${applied.archived}` : '') +
-          (warnings.length ? ` · 주의: ${warnings.join(', ')}` : '');
+          (warnings.length ? ` · ⚠️ ${warnings.join(' / ')}` : '');
       } catch (e) {
-        this.sync.status = '실패: ' + (e.message || e);
+        const msg = String(e.message || e);
+        if (/401|unauthorized|SYNC_KEY|NOTION_TOKEN|설정/i.test(msg)) {
+          this.sync.state = 'config';
+          this.sync.status = '⚠️ Notion 동기화 설정을 확인하세요 — ' + msg;
+        } else {
+          this.sync.state = 'error';
+          this.sync.status = '⚠️ Notion 업무를 불러오지 못했습니다 — ' + msg;
+        }
         if (!opts.silent) console.error('syncNotion', e);
       } finally {
         this.sync.busy = false;
       }
+    },
+    statusLabel(s) { return s === 'doing' ? '진행 중' : s === 'done' ? '완료' : '진행 전'; },
+    boardEmptyMsg() {
+      if (this.sync.state === 'error') return '⚠️ Notion 업무를 불러오지 못했습니다. 잠시 후 다시 시도하세요.';
+      if (this.sync.state === 'config') return '⚠️ Notion 동기화 설정을 확인하세요 (불러오기 → Notion 동기화 탭).';
+      if (this.search || this.fPrio !== 'all' || this.fCat !== 'all') return '검색·필터 조건에 맞는 업무가 없습니다.';
+      return this.sync.lastOk ? '현재 표시할 업무가 없습니다.' : '아직 동기화 전입니다. Notion 동기화를 실행하세요.';
     },
     mergeNotion(data, first) {
       let added = 0, archived = 0;
@@ -1047,12 +1102,11 @@ document.addEventListener('alpine:init', () => {
             <option value="all">모든 카테고리</option>
             <template x-for="c in cats" :key="c.id"><option :value="c.id" x-text="c.label"></option></template>
           </select>
-          <select class="field !w-auto text-[12px] !py-1.5" x-model="sort" title="정렬 기준">
-            <option value="due">마감 임박순</option>
-            <option value="created">등록순</option>
-            <option value="prio">우선순위순</option>
-          </select>
+          <button class="btn !py-1.5 !text-[12px]" :data-on="showDone"
+                  :style="showDone ? 'border-color:var(--good);color:var(--good)' : ''"
+                  @click="showDone = !showDone" x-text="showDone ? '완료 표시 중' : '완료 숨김'"></button>
         </div>
+        <p class="text-[10px]" style="color:var(--ink-faint)">정렬: 기한 초과 → 오늘 마감 → P1 → 마감 임박 → P2 → P3 → 마감일 없음</p>
       </div>
 
       <!-- quick add -->
@@ -1071,29 +1125,32 @@ document.addEventListener('alpine:init', () => {
       <!-- KANBAN -->
       <div x-show="view==='kanban'" class="flex flex-col gap-3">
         <div class="flex items-center gap-2 flex-wrap">
-          <span class="label">그룹 기준</span>
+          <span class="label">보기</span>
           <div class="seg">
+            <button :data-on="kanbanGroup==='section'" @click="kanbanGroup='section'">구역</button>
             <button :data-on="kanbanGroup==='status'" @click="kanbanGroup='status'">상태</button>
             <button :data-on="kanbanGroup==='prio'" @click="kanbanGroup='prio'">우선순위</button>
             <button :data-on="kanbanGroup==='cat'" @click="kanbanGroup='cat'">카테고리</button>
           </div>
-          <span class="text-[10.5px] ml-auto hidden sm:flex items-center gap-1" style="color:var(--ink-faint)">
+          <span x-show="kanbanGroup!=='section'" class="text-[10.5px] ml-auto hidden sm:flex items-center gap-1" style="color:var(--ink-faint)">
             <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M6 1v10M1 6h10M3.5 3.5 6 1l2.5 2.5M3.5 8.5 6 11l2.5-2.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
             카드를 끌어 이동
           </span>
         </div>
-        <div class="grid gap-3" :class="kanbanGroup==='cat' ? 'sm:grid-cols-2' : 'sm:grid-cols-3'">
+        <div class="grid gap-3"
+             :class="kanbanGroup==='section' ? 'grid-cols-1' : kanbanGroup==='cat' ? 'sm:grid-cols-2' : 'sm:grid-cols-3'">
           <template x-for="col in groupCols()" :key="col.key">
-            <div x-show="kanbanGroup!=='cat' || fCat==='all' || fCat===col.key"
+            <div x-show="(kanbanGroup!=='cat' || fCat==='all' || fCat===col.key) && (kanbanGroup!=='section' || colTasks(col.key).length)"
                  class="col-body flex flex-col gap-2 rounded-[11px] p-2.5"
                  style="background:var(--bg);border:1px solid var(--edge-soft);min-height:74px"
-                 :data-drop="dragId && dragCol===col.key"
-                 @dragover.prevent="dragEnterCol(col.key)"
-                 @drop.prevent="dropOnCol(col.key)">
+                 :data-drop="dragId && kanbanGroup!=='section' && dragCol===col.key"
+                 @dragover.prevent="kanbanGroup!=='section' && dragEnterCol(col.key)"
+                 @drop.prevent="kanbanGroup!=='section' && dropOnCol(col.key)">
               <div class="flex items-center justify-between px-0.5">
-                <div class="flex items-center gap-2">
+                <div class="flex items-center gap-2 flex-wrap">
                   <span class="dot" :style="`background:${col.color}`"></span>
                   <span class="text-[12px] font-semibold" x-text="col.label"></span>
+                  <span x-show="col.hint" x-cloak class="text-[9.5px]" style="color:var(--ink-faint)" x-text="col.hint"></span>
                 </div>
                 <span class="mono text-[10.5px]" style="color:var(--ink-faint)" x-text="colCount(col.key).total"></span>
               </div>
@@ -1111,6 +1168,9 @@ document.addEventListener('alpine:init', () => {
                   </div>
                   <div class="flex items-center flex-wrap gap-2 pl-[26px]">
                     <span class="prio" :style="`color:${prioColor(t.prio)}`" x-text="t.prio"></span>
+                    <span class="chip !py-0 !text-[9.5px]"
+                          :style="t.status==='doing' ? 'color:var(--accent)' : t.status==='done' ? 'color:var(--good)' : 'color:var(--ink-faint)'"
+                          x-text="statusLabel(t.status)"></span>
                     <span class="chip !py-0 !text-[9.5px]" x-show="kanbanGroup!=='cat'">
                       <span class="dot" :style="`background:${catMeta(t.cat).color}`"></span>
                       <span x-text="catMeta(t.cat).short"></span>
@@ -1135,10 +1195,11 @@ document.addEventListener('alpine:init', () => {
                   </div>
                 </div>
               </template>
-              <div x-show="!colTasks(col.key).length" class="empty">비어 있음</div>
+              <div x-show="!colTasks(col.key).length && kanbanGroup!=='section'" class="empty">비어 있음</div>
             </div>
           </template>
         </div>
+        <div x-show="!boardTasks().length" x-cloak class="empty" x-text="boardEmptyMsg()"></div>
       </div>
 
       <!-- LIST -->
@@ -1171,7 +1232,7 @@ document.addEventListener('alpine:init', () => {
             </div>
           </div>
         </template>
-        <div x-show="!listTasks().length" class="empty">조건에 맞는 할 일이 없습니다</div>
+        <div x-show="!listTasks().length" x-cloak class="empty" x-text="boardEmptyMsg()"></div>
       </div>
 
       <!-- ARCHIVE (지난 업무) -->
