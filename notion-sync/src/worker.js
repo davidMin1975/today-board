@@ -156,9 +156,19 @@ function unifiedWorkFromPage(p) {
     workType,
     customer: anyText(P['고객사']),
     nextAction: anyText(P['다음 행동']),
+    briefing: P['브리핑 포함']?.checkbox === true,
     notionReadOnly: true,
     source: 'unified-work',
   };
+}
+
+// "오늘의 한 줄 목표" 자동 제안: 브리핑 포함 + P1 + 미완료, 마감 빠른 순 상위 3건
+function briefingGoal(items) {
+  const picked = items
+    .filter((t) => t.briefing && t.prio === 'P1' && t.status !== 'done')
+    .sort((a, b) => String(a.due || '9999-99-99').localeCompare(String(b.due || '9999-99-99')))
+    .slice(0, 3);
+  return picked.map((t) => ({ title: t.title, customer: t.customer, due: t.due, notionUrl: t.notionUrl }));
 }
 
 function schedFromPage(p) {
@@ -226,9 +236,12 @@ async function pull(env) {
     [{ property: '일시', direction: 'ascending' }],
   );
 
+  const unifiedItems = unifiedWork.pages.map(unifiedWorkFromPage);
+
   return {
-    tasks: [...todoPages.map(taskFromPage), ...unifiedWork.pages.map(unifiedWorkFromPage)],
+    tasks: [...todoPages.map(taskFromPage), ...unifiedItems],
     sched: schedPages.map(schedFromPage),
+    briefingP1: briefingGoal(unifiedItems),
     warnings: unifiedWork.warning ? [unifiedWork.warning] : [],
     pulledAt: new Date().toISOString(),
   };

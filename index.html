@@ -279,6 +279,7 @@ document.addEventListener('alpine:init', () => {
     _iv: null,
 
     goal: '○○청 통합관제 제안서 초안 마감 + △△제작소 현장 실사',
+    goalSuggest: '',
     view: 'kanban',
     fPrio: 'all',
     fCat: 'all',
@@ -946,6 +947,7 @@ document.addEventListener('alpine:init', () => {
         const gj = await gr.json().catch(() => ({}));
         if (!gr.ok) throw new Error(gj.error || ('pull HTTP ' + gr.status));
         const applied = this.mergeNotion(gj, first);
+        this.goalSuggest = this._composeGoal(gj.briefingP1 || []);
 
         this.sync.lastAt = Date.now();
         this.sync.lastOk = Date.now();
@@ -970,6 +972,16 @@ document.addEventListener('alpine:init', () => {
       }
     },
     statusLabel(s) { return s === 'doing' ? '진행 중' : s === 'done' ? '완료' : '진행 전'; },
+    // 브리핑 P1 업무 → "오늘의 한 줄 목표" 제안 문자열 (고객사 우선, 없으면 업무명)
+    _composeGoal(list) {
+      if (!Array.isArray(list) || !list.length) return '';
+      const short = (t) => {
+        const c = (t.customer || '').split(/[\/·]/)[0].trim();
+        const base = (c && c.length <= 16) ? c : (t.title || '');
+        return base.length > 22 ? base.slice(0, 22) + '…' : base;
+      };
+      return list.map(short).filter(Boolean).join(' · ');
+    },
     boardEmptyMsg() {
       if (this.sync.state === 'error') return '⚠️ Notion 업무를 불러오지 못했습니다. 잠시 후 다시 시도하세요.';
       if (this.sync.state === 'config') return '⚠️ Notion 동기화 설정을 확인하세요 (불러오기 → Notion 동기화 탭).';
@@ -1050,6 +1062,11 @@ document.addEventListener('alpine:init', () => {
           <div class="w-[3px] rounded-full flex-none" style="background:var(--accent)"></div>
           <input id="goal" class="field !bg-transparent !border-transparent !px-1 text-[15px] font-medium"
                  x-model="goal" placeholder="오늘 반드시 끝낼 한 가지를 적으세요" />
+        </div>
+        <div x-show="goalSuggest && goalSuggest !== goal" x-cloak class="flex items-center gap-2 mt-1.5 flex-wrap pl-[11px]">
+          <span class="text-[10.5px]" style="color:var(--ink-faint)">💡 브리핑 P1</span>
+          <span class="text-[11px]" style="color:var(--ink-dim)" x-text="goalSuggest"></span>
+          <button class="btn btn-ghost !px-2 !py-0.5 !text-[10px]" @click="goal = goalSuggest">목표로 적용</button>
         </div>
         <div class="mt-3 flex items-center gap-3">
           <div class="track flex-1 max-w-[260px]"><i :style="`width:${progress().pct}%`"></i></div>

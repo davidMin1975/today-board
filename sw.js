@@ -6,7 +6,7 @@
  *
  * 배포/수정 후 캐시를 강제로 갱신하려면 아래 VERSION 값을 올리세요.
  */
-const VERSION = 'today-board-v6';
+const VERSION = 'today-board-v7';
 const PRECACHE = VERSION + '-precache';
 const RUNTIME  = VERSION + '-runtime';
 
