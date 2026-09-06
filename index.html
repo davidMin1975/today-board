@@ -8,7 +8,7 @@
 <link rel="canonical" href="https://davidmin1975.github.io/today-board/" />
 
 <title>Today Board — 오늘의 업무 &amp; 일정 대시보드</title>
-<meta name="description" content="기술영업·사업관리·시스템 모니터링·개인 루틴을 한 화면에서 관리하는 고밀도 다크 대시보드. 칸반/타임라인/포커스 타이머, localStorage 자동 저장, JSON·텔레그램 백업." />
+<meta name="description" content="기술영업·사업관리 업무를 한 화면에서 관리하는 고밀도 다크 대시보드. 한 줄 목표·칸반 업무 보드·오늘의 일정·퀵 링크, localStorage 자동 저장, JSON·텔레그램·Notion 백업." />
 <meta name="author" content="Today Board" />
 <meta name="robots" content="index, follow" />
 <meta name="theme-color" content="#0b0c0f" />
@@ -19,7 +19,7 @@
 <meta property="og:type" content="website" />
 <meta property="og:site_name" content="Today Board" />
 <meta property="og:title" content="Today Board — 오늘의 업무 &amp; 일정 대시보드" />
-<meta property="og:description" content="기술영업·사업관리·모니터링·개인 루틴을 한 화면에서. 칸반 · 타임라인 · 포커스 타이머 · 자동 저장 · 백업." />
+<meta property="og:description" content="기술영업·사업관리 업무를 한 화면에서. 한 줄 목표 · 칸반 업무 보드 · 오늘의 일정 · 퀵 링크 · 자동 저장 · 백업." />
 <meta property="og:locale" content="ko_KR" />
 <meta property="og:url" content="https://davidmin1975.github.io/today-board/" />
 <meta property="og:image" content="https://davidmin1975.github.io/today-board/og-cover.png" />
@@ -30,7 +30,7 @@
 <!-- Twitter/X -->
 <meta name="twitter:card" content="summary_large_image" />
 <meta name="twitter:title" content="Today Board — 오늘의 업무 &amp; 일정 대시보드" />
-<meta name="twitter:description" content="기술영업·사업관리·모니터링·개인 루틴을 한 화면에서 관리하는 다크 대시보드." />
+<meta name="twitter:description" content="기술영업·사업관리 업무를 한 화면에서 관리하는 다크 대시보드." />
 <meta name="twitter:image" content="https://davidmin1975.github.io/today-board/og-cover.png" />
 
 <!-- PWA -->
@@ -207,18 +207,6 @@
   .due[data-state="overdue"]{ color:var(--crit); border-color:rgba(229,89,95,.4); }
   .due[data-state="today"]{ color:var(--accent); border-color:rgba(227,167,92,.4); }
 
-  .tl-item{
-    display:grid; grid-template-columns:52px 1fr; gap:10px; align-items:start;
-    padding:8px 10px; border-radius:9px; border:1px solid transparent;
-    transition:background .12s ease,border-color .12s ease;
-  }
-  .tl-item[data-active="true"]{
-    background:var(--accent-soft); border-color:rgba(227,167,92,.32);
-  }
-  .tl-item[data-done="true"] .tl-label{ color:var(--ink-faint); text-decoration:line-through; }
-  .tl-time{ font-size:11.5px; color:var(--ink-dim); padding-top:1px; }
-  .tl-item[data-active="true"] .tl-time{ color:var(--accent); }
-
   .qlink{
     display:flex; flex-direction:column; gap:6px; align-items:flex-start;
     padding:11px; border-radius:10px; border:1px solid var(--edge-soft);
@@ -320,8 +308,6 @@ document.addEventListener('alpine:init', () => {
     ],
 
     tasks: [],
-    timeline: [],
-    routines: [],
     links: [
       { id: 'gh',   label: 'GitHub',        url: 'https://github.com',            icon: '' },
       { id: 'inv',  label: '투자 대시보드',  url: 'https://finance.yahoo.com',      icon: '' },
@@ -332,11 +318,7 @@ document.addEventListener('alpine:init', () => {
     ],
     favFail: {},
 
-    pomo: { running: false, remaining: 1500, total: 1500, mode: 'focus', rounds: 0 },
-    pomoSound: true,
-    pomoNotify: false,
     linksEdit: false,
-    _audio: null,
 
     backup: { open: false, tab: 'export', text: '', paste: '', copied: false, error: '' },
     tg: { token: '', chat: '', status: '', sending: false },
@@ -351,8 +333,6 @@ document.addEventListener('alpine:init', () => {
       } else {
         this.seed();
       }
-      if (!this.timeline.length) this.seedTimeline();
-      if (!this.routines.length) this.seedRoutines();
       this.migrate();
       this.loadTg();
       this.loadSync();
@@ -366,9 +346,9 @@ document.addEventListener('alpine:init', () => {
         setTimeout(() => this.syncNotion({ silent: true }), 1500);
       }
 
-      this._iv = setInterval(() => { this.now = new Date(); this.tickPomo(); }, 1000);
+      this._iv = setInterval(() => { this.now = new Date(); }, 1000);
 
-      ['goal', 'view', 'fPrio', 'fCat', 'sort', 'kanbanGroup', 'tasks', 'systems', 'timeline', 'routines', 'links', 'pomo', 'pomoSound', 'pomoNotify']
+      ['goal', 'view', 'fPrio', 'fCat', 'sort', 'kanbanGroup', 'tasks', 'systems', 'links']
         .forEach(k => this.$watch(k, () => this.save()));
     },
 
@@ -407,32 +387,6 @@ document.addEventListener('alpine:init', () => {
         mk({ title: '수영 1km / 킥판 200m',                 cat: 'life',  prio: 'P2' }),
         mk({ title: '물 2L · 스트레칭 10분',                cat: 'life',  prio: 'P3' }),
       ];
-      this.seedTimeline();
-      this.seedRoutines();
-    },
-
-    seedTimeline() {
-      this.timeline = [
-        { id: this.uid(), period: '오전', from: 6.5,  to: 7.5,   time: '06:30', label: '기상 · 스트레칭 · 뉴스 브리핑', kind: 'routine', done: false },
-        { id: this.uid(), period: '오전', from: 8.5,  to: 9,     time: '08:30', label: '데일리 브리핑 확인 · 우선순위 정리', kind: 'routine', done: false },
-        { id: this.uid(), period: '오전', from: 9,    to: 9.5,   time: '09:00', label: '팀 스탠드업 미팅', kind: 'meeting', done: false },
-        { id: this.uid(), period: '오전', from: 10,   to: 12,    time: '10:00', label: '제안서 기술 파트 집중 작업', kind: 'focus', done: false },
-        { id: this.uid(), period: '오후', from: 13,   to: 16,    time: '13:00', label: '△△제작소 현장 방문 · 실사', kind: 'meeting', done: false },
-        { id: this.uid(), period: '오후', from: 16.5, to: 17.5,  time: '16:30', label: '자동화 파이프라인 점검 · 로그 리뷰', kind: 'focus', done: false },
-        { id: this.uid(), period: '오후', from: 17.5, to: 18.5,  time: '17:30', label: '견적 검토 콜 · 내부 공유', kind: 'meeting', done: false },
-        { id: this.uid(), period: '저녁', from: 19.5, to: 21,    time: '19:30', label: '수영 (자유형 인터벌)', kind: 'routine', done: false },
-        { id: this.uid(), period: '저녁', from: 21.5, to: 22.5,  time: '21:30', label: '회고 · 내일 일정 계획', kind: 'routine', done: false },
-      ];
-    },
-
-    seedRoutines() {
-      this.routines = [
-        { id: this.uid(), label: '데일리 브리핑 확인', done: true },
-        { id: this.uid(), label: '수영 / 운동',        done: false },
-        { id: this.uid(), label: '커피 1잔 (오전만)',  done: true },
-        { id: this.uid(), label: '물 2L',              done: false },
-        { id: this.uid(), label: '내일 일정 점검',     done: false },
-      ];
     },
 
     /* ---------- persistence ---------- */
@@ -440,13 +394,11 @@ document.addEventListener('alpine:init', () => {
       return {
         v: 1, goal: this.goal, view: this.view, fPrio: this.fPrio, fCat: this.fCat,
         sort: this.sort, kanbanGroup: this.kanbanGroup,
-        tasks: this.tasks, systems: this.systems, timeline: this.timeline,
-        routines: this.routines, links: this.links, pomo: this.pomo,
-        pomoSound: this.pomoSound, pomoNotify: this.pomoNotify,
+        tasks: this.tasks, systems: this.systems, links: this.links,
       };
     },
     apply(d) {
-      ['goal', 'view', 'fPrio', 'fCat', 'sort', 'kanbanGroup', 'tasks', 'systems', 'timeline', 'routines', 'links', 'pomo', 'pomoSound', 'pomoNotify']
+      ['goal', 'view', 'fPrio', 'fCat', 'sort', 'kanbanGroup', 'tasks', 'systems', 'links']
         .forEach(k => { if (d[k] !== undefined && d[k] !== null) this[k] = d[k]; });
     },
     save() {
@@ -561,7 +513,6 @@ document.addEventListener('alpine:init', () => {
       const d = this.now, p = (n) => String(n).padStart(2, '0');
       return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
     },
-    get nowDec() { return this.now.getHours() + this.now.getMinutes() / 60; },
 
     /* ---------- tasks ---------- */
     addTask() {
@@ -582,7 +533,10 @@ document.addEventListener('alpine:init', () => {
       if (s === 'done') { t.completedAt = t.completedAt || Date.now(); }
       else { t.completedAt = null; t.archived = false; }
     },
-    toggleTask(t) { this.setStatus(t, t.done ? 'todo' : 'done'); },
+    toggleTask(t) {
+      if (t.notionReadOnly) return; // 통합 업무 실행 DB 등 읽기 전용 원본은 보드에서 변경하지 않음
+      this.setStatus(t, t.done ? 'todo' : 'done');
+    },
 
     /* archive */
     isArchived(t) {
@@ -674,7 +628,7 @@ document.addEventListener('alpine:init', () => {
     dropOnCol(key) {
       const t = this.tasks.find(x => x.id === this.dragId);
       this.dragCol = null;
-      if (!t) return;
+      if (!t || t.notionReadOnly) { this.dragId = null; return; }
       if (this.kanbanGroup === 'prio') t.prio = key;
       else if (this.kanbanGroup === 'cat') t.cat = key;
       else this.setStatus(t, key);
@@ -837,70 +791,6 @@ document.addEventListener('alpine:init', () => {
       this.links = a;
     },
 
-    /* ---------- timeline ---------- */
-    periods: ['오전', '오후', '저녁'],
-    tlIn(p) { return this.timeline.filter(i => i.period === p); },
-    tlActive(i) { return this.nowDec >= i.from && this.nowDec < i.to; },
-    tlKindLabel(k) { return k === 'meeting' ? '미팅' : k === 'focus' ? '집중' : '루틴'; },
-
-    /* ---------- pomodoro ---------- */
-    tickPomo() {
-      if (!this.pomo.running) return;
-      if (this.pomo.remaining > 0) { this.pomo.remaining--; return; }
-      this.pomo.running = false;
-      if (this.pomo.mode === 'focus') {
-        this.pomo.rounds++;
-        this.playChime('focus');
-        this.fireNotify('집중 세션 완료 🎯', '25분 집중이 끝났습니다. 5분 휴식하세요.');
-        this.pomo.mode = 'break'; this.pomo.total = 300; this.pomo.remaining = 300;
-      } else {
-        this.playChime('break');
-        this.fireNotify('휴식 종료 ☕', '다음 집중 세션을 시작하세요.');
-        this.pomo.mode = 'focus'; this.pomo.total = 1500; this.pomo.remaining = 1500;
-      }
-    },
-    pomoToggle() { this.ensureAudio(); this.pomo.running = !this.pomo.running; },
-    pomoReset() { this.pomo.running = false; this.pomo.remaining = this.pomo.total; },
-
-    ensureAudio() {
-      try {
-        const AC = window.AudioContext || window.webkitAudioContext;
-        if (!AC) return;
-        if (!this._audio) this._audio = new AC();
-        if (this._audio.state === 'suspended') this._audio.resume();
-      } catch (e) { this._audio = null; }
-    },
-    playChime(kind) {
-      if (!this.pomoSound) return;
-      this.ensureAudio();
-      const ac = this._audio;
-      if (!ac) return;
-      const start = ac.currentTime + 0.02;
-      const notes = kind === 'break' ? [587.33, 440] : [523.25, 659.25, 783.99];
-      notes.forEach((f, i) => {
-        const o = ac.createOscillator(), g = ac.createGain();
-        o.type = 'sine';
-        o.frequency.value = f;
-        const t = start + i * 0.17;
-        g.gain.setValueAtTime(0.0001, t);
-        g.gain.linearRampToValueAtTime(0.16, t + 0.025);
-        g.gain.exponentialRampToValueAtTime(0.0008, t + 0.5);
-        o.connect(g); g.connect(ac.destination);
-        o.start(t); o.stop(t + 0.55);
-      });
-    },
-    async requestNotify() {
-      if (!('Notification' in window)) { this.pomoNotify = false; return; }
-      try {
-        const p = Notification.permission === 'granted' ? 'granted' : await Notification.requestPermission();
-        this.pomoNotify = (p === 'granted');
-      } catch (e) { this.pomoNotify = false; }
-    },
-    fireNotify(title, body) {
-      if (!this.pomoNotify || !('Notification' in window) || Notification.permission !== 'granted') return;
-      try { new Notification(title, { body, silent: true }); } catch (e) {}
-    },
-
     /* ---------- telegram backup ---------- */
     loadTg() {
       try {
@@ -1036,6 +926,10 @@ document.addEventListener('alpine:init', () => {
             t.cat = n.cat;
             t.notionUrl = n.notionUrl;
             t.notionReadOnly = !!n.notionReadOnly;
+            t.source = n.source || '';
+            t.customer = n.customer || '';
+            t.nextAction = n.nextAction || '';
+            t.workType = n.workType || '';
             if (!isSched && n.status && n.status !== t.status) this.setStatus(t, n.status);
           } else {
             this.tasks.push({
@@ -1043,6 +937,7 @@ document.addEventListener('alpine:init', () => {
               done: !!n.done, due: n.due || '', status: n.status || 'todo',
               archived: false, completedAt: n.done ? Date.now() : null, createdAt: Date.now(),
               notionId: n.notionId, notionUrl: n.notionUrl, notionSched: !!isSched, notionReadOnly: !!n.notionReadOnly,
+              source: n.source || '', customer: n.customer || '', nextAction: n.nextAction || '', workType: n.workType || '',
             });
             added++;
           }
@@ -1058,26 +953,6 @@ document.addEventListener('alpine:init', () => {
         if (t.notionId && !seen.has(t.notionId) && !t.archived) { t.archived = true; archived++; }
       });
       return { added, archived };
-    },
-
-    pomoMode(m) {
-      this.pomo.mode = m;
-      this.pomo.total = m === 'focus' ? 1500 : 300;
-      this.pomo.remaining = this.pomo.total;
-      this.pomo.running = false;
-    },
-    mmss(s) { const m = Math.floor(s / 60), ss = s % 60; return String(m).padStart(2, '0') + ':' + String(ss).padStart(2, '0'); },
-    get ringOffset() {
-      const c = 2 * Math.PI * 52;
-      return c * (1 - this.pomo.remaining / this.pomo.total);
-    },
-
-    /* ---------- day reset ---------- */
-    resetDay() {
-      if (!confirm('오늘 진행 상태를 초기화할까요? (완료 체크 · 루틴 · 타임라인 체크가 해제됩니다)')) return;
-      this.tasks.forEach(t => t.done = false);
-      this.routines.forEach(r => r.done = false);
-      this.timeline.forEach(i => i.done = false);
     },
   }));
 });
@@ -1144,42 +1019,8 @@ document.addEventListener('alpine:init', () => {
   <!-- ===== GRID ===== -->
   <div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
 
-    <!-- TIMELINE -->
-    <section class="lg:col-span-3 panel p-4 flex flex-col">
-      <div class="flex items-center justify-between mb-3">
-        <h2 class="font-display text-[15px] font-semibold">타임라인</h2>
-        <span class="chip"><span class="dot" style="background:var(--accent)"></span>진행 중</span>
-      </div>
-      <div class="flex flex-col gap-4 scroll overflow-y-auto pr-1" style="max-height:none">
-        <template x-for="p in periods" :key="p">
-          <div>
-            <div class="label mb-1.5" x-text="p"></div>
-            <div class="flex flex-col gap-0.5">
-              <template x-for="i in tlIn(p)" :key="i.id">
-                <div class="tl-item" :data-active="tlActive(i)" :data-done="i.done">
-                  <div class="tl-time mono" x-text="i.time"></div>
-                  <div class="min-w-0">
-                    <div class="flex items-start gap-2">
-                      <input type="checkbox" class="chk mt-0.5" :checked="i.done" @change="i.done = !i.done" />
-                      <span class="tl-label text-[12.5px] leading-snug" x-text="i.label"></span>
-                    </div>
-                    <div class="flex items-center gap-2 mt-1 pl-6">
-                      <span class="chip !py-0 !text-[9.5px]"
-                            :style="i.kind==='meeting' ? 'color:var(--bid)' : i.kind==='focus' ? 'color:var(--accent)' : ''"
-                            x-text="tlKindLabel(i.kind)"></span>
-                      <span x-show="tlActive(i)" class="mono text-[9.5px]" style="color:var(--accent)">NOW</span>
-                    </div>
-                  </div>
-                </div>
-              </template>
-            </div>
-          </div>
-        </template>
-      </div>
-    </section>
-
     <!-- BOARD -->
-    <section class="lg:col-span-6 panel p-4 flex flex-col">
+    <section class="lg:col-span-8 panel p-4 flex flex-col">
       <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
         <h2 class="font-display text-[15px] font-semibold">업무 보드</h2>
         <div class="seg">
@@ -1257,34 +1098,40 @@ document.addEventListener('alpine:init', () => {
                 <span class="mono text-[10.5px]" style="color:var(--ink-faint)" x-text="colCount(col.key).total"></span>
               </div>
               <template x-for="t in colTasks(col.key)" :key="t.id">
-                <div class="card group" draggable="true"
+                <div class="card group" :draggable="!t.notionReadOnly"
                      :data-done="t.done" :data-drag="dragId===t.id"
                      :style="`--_cat:${catMeta(t.cat).color}`"
                      @dragstart="dragStart(t.id, $event)" @dragend="dragEnd()">
                   <div class="flex items-start gap-2.5">
-                    <input type="checkbox" class="chk mt-0.5" :checked="t.done" @change="toggleTask(t)" />
+                    <input type="checkbox" class="chk mt-0.5" :checked="t.done" :disabled="t.notionReadOnly" @change="toggleTask(t)" />
                     <span class="card-title text-[12.5px] leading-snug flex-1" x-text="t.title"></span>
-                    <button class="opacity-0 group-hover:opacity-100 transition" style="color:var(--ink-faint)" @click="removeTask(t.id)" title="삭제">
+                    <button x-show="!t.notionReadOnly" class="opacity-0 group-hover:opacity-100 transition" style="color:var(--ink-faint)" @click="removeTask(t.id)" title="삭제">
                       <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M3 3l6 6M9 3l-6 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
                     </button>
                   </div>
-                  <div class="flex items-center gap-2 pl-[26px]">
+                  <div class="flex items-center flex-wrap gap-2 pl-[26px]">
                     <span class="prio" :style="`color:${prioColor(t.prio)}`" x-text="t.prio"></span>
                     <span class="chip !py-0 !text-[9.5px]" x-show="kanbanGroup!=='cat'">
                       <span class="dot" :style="`background:${catMeta(t.cat).color}`"></span>
                       <span x-text="catMeta(t.cat).short"></span>
                     </span>
+                    <span x-show="t.workType" x-cloak class="chip !py-0 !text-[9.5px]" x-text="t.workType"></span>
                     <label class="due" :data-state="dueState(t.due)">
                       <span x-text="dueLabel(t.due)"></span>
-                      <input type="date" class="sr-only" x-model="t.due" />
+                      <input type="date" class="sr-only" x-model="t.due" :disabled="t.notionReadOnly" />
                     </label>
                     <a x-show="t.notionId" x-cloak :href="t.notionUrl" target="_blank" rel="noopener noreferrer"
-                       class="text-[9px] font-bold" :style="t.notionSched ? 'color:var(--bid)' : 'color:var(--ink-faint)'"
-                       :title="t.notionSched ? 'Notion 일정 (읽기 전용)' : 'Notion 할일 열기'" x-text="t.notionSched ? '일정' : 'N'"></a>
+                       class="text-[9px] font-bold" :style="(t.notionSched || t.notionReadOnly) ? 'color:var(--bid)' : 'color:var(--ink-faint)'"
+                       :title="t.notionSched ? 'Notion 일정 (읽기 전용)' : t.source==='unified-work' ? '통합 업무 실행 DB (읽기 전용)' : 'Notion 할일 열기'"
+                       x-text="t.notionSched ? '일정' : t.source==='unified-work' ? '업무' : 'N'"></a>
                     <span x-show="t.localOnly" x-cloak class="text-[9px]" style="color:var(--ink-faint)" title="로컬 전용 · Notion 미연결">로컬</span>
-                    <button x-show="t.done && !t.archived" x-cloak
+                    <button x-show="t.done && !t.archived && !t.notionReadOnly" x-cloak
                             class="ml-auto opacity-0 group-hover:opacity-100 transition text-[10px]"
                             style="color:var(--ink-faint)" @click="archiveTask(t)" title="지난 업무로 보관">보관</button>
+                  </div>
+                  <div x-show="t.customer || t.nextAction" x-cloak class="pl-[26px] flex flex-col gap-0.5">
+                    <span x-show="t.customer" x-cloak class="text-[10.5px]" style="color:var(--ink-dim)">고객사 · <span x-text="t.customer"></span></span>
+                    <span x-show="t.nextAction" x-cloak class="text-[10.5px]" style="color:var(--ink-faint)">다음 행동 · <span x-text="t.nextAction"></span></span>
                   </div>
                 </div>
               </template>
@@ -1297,22 +1144,31 @@ document.addEventListener('alpine:init', () => {
       <!-- LIST -->
       <div x-show="view==='list'" class="flex flex-col gap-1.5">
         <template x-for="t in listTasks()" :key="t.id">
-          <div class="card group flex-row items-center" :data-done="t.done" :style="`--_cat:${catMeta(t.cat).color}`">
-            <input type="checkbox" class="chk" :checked="t.done" @change="toggleTask(t)" />
-            <span class="card-title text-[12.5px] flex-1 ml-2.5" x-text="t.title"></span>
-            <span class="prio mr-2" :style="`color:${prioColor(t.prio)}`" x-text="t.prio"></span>
-            <span class="chip mr-2 hidden sm:inline-flex">
-              <span class="dot" :style="`background:${catMeta(t.cat).color}`"></span>
-              <span x-text="catMeta(t.cat).short"></span>
-            </span>
-            <label class="due mr-2" :data-state="dueState(t.due)">
-              <span x-text="dueLabel(t.due)"></span>
-              <input type="date" class="sr-only" x-model="t.due" />
-            </label>
-            <button x-show="t.done && !t.archived" x-cloak class="mr-2 text-[10px] opacity-0 group-hover:opacity-100 transition" style="color:var(--ink-faint)" @click="archiveTask(t)" title="지난 업무로 보관">보관</button>
-            <button style="color:var(--ink-faint)" class="opacity-0 group-hover:opacity-100 transition" @click="removeTask(t.id)" title="삭제">
-              <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M3 3l6 6M9 3l-6 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
-            </button>
+          <div class="card group" :data-done="t.done" :style="`--_cat:${catMeta(t.cat).color}`">
+            <div class="flex flex-row items-center">
+              <input type="checkbox" class="chk" :checked="t.done" :disabled="t.notionReadOnly" @change="toggleTask(t)" />
+              <span class="card-title text-[12.5px] flex-1 ml-2.5" x-text="t.title"></span>
+              <span class="prio mr-2" :style="`color:${prioColor(t.prio)}`" x-text="t.prio"></span>
+              <span x-show="t.workType" x-cloak class="chip mr-2 hidden sm:inline-flex !text-[9.5px]" x-text="t.workType"></span>
+              <span class="chip mr-2 hidden sm:inline-flex">
+                <span class="dot" :style="`background:${catMeta(t.cat).color}`"></span>
+                <span x-text="catMeta(t.cat).short"></span>
+              </span>
+              <label class="due mr-2" :data-state="dueState(t.due)">
+                <span x-text="dueLabel(t.due)"></span>
+                <input type="date" class="sr-only" x-model="t.due" :disabled="t.notionReadOnly" />
+              </label>
+              <a x-show="t.source==='unified-work'" x-cloak :href="t.notionUrl" target="_blank" rel="noopener noreferrer"
+                 class="text-[9px] font-bold mr-2" style="color:var(--bid)" title="통합 업무 실행 DB (읽기 전용)">업무</a>
+              <button x-show="t.done && !t.archived && !t.notionReadOnly" x-cloak class="mr-2 text-[10px] opacity-0 group-hover:opacity-100 transition" style="color:var(--ink-faint)" @click="archiveTask(t)" title="지난 업무로 보관">보관</button>
+              <button x-show="!t.notionReadOnly" style="color:var(--ink-faint)" class="opacity-0 group-hover:opacity-100 transition" @click="removeTask(t.id)" title="삭제">
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M3 3l6 6M9 3l-6 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+              </button>
+            </div>
+            <div x-show="t.customer || t.nextAction" x-cloak class="flex flex-wrap gap-x-3 gap-y-0.5 mt-1 ml-[26px]">
+              <span x-show="t.customer" x-cloak class="text-[10.5px]" style="color:var(--ink-dim)">고객사 · <span x-text="t.customer"></span></span>
+              <span x-show="t.nextAction" x-cloak class="text-[10.5px]" style="color:var(--ink-faint)">다음 행동 · <span x-text="t.nextAction"></span></span>
+            </div>
           </div>
         </template>
         <div x-show="!listTasks().length" class="empty">조건에 맞는 할 일이 없습니다</div>
@@ -1345,8 +1201,8 @@ document.addEventListener('alpine:init', () => {
       </div>
     </section>
 
-    <!-- FOCUS / MONITORING -->
-    <aside class="lg:col-span-3 flex flex-col gap-4">
+    <!-- SIDEBAR -->
+    <aside class="lg:col-span-4 flex flex-col gap-4">
 
       <!-- quick links -->
       <section class="panel p-4">
@@ -1407,72 +1263,6 @@ document.addEventListener('alpine:init', () => {
             </p>
           </div>
         </template>
-      </section>
-
-      <!-- pomodoro -->
-      <section class="panel p-4">
-        <div class="flex items-center justify-between mb-3">
-          <h2 class="font-display text-[15px] font-semibold">집중 타이머</h2>
-          <div class="seg">
-            <button :data-on="pomo.mode==='focus'" @click="pomoMode('focus')">집중</button>
-            <button :data-on="pomo.mode==='break'" @click="pomoMode('break')">휴식</button>
-          </div>
-        </div>
-        <div class="flex items-center gap-4">
-          <div class="relative flex-none" style="width:116px;height:116px">
-            <svg viewBox="0 0 116 116" class="w-full h-full -rotate-90">
-              <circle cx="58" cy="58" r="52" fill="none" stroke="var(--edge-soft)" stroke-width="7"/>
-              <circle cx="58" cy="58" r="52" fill="none" :stroke="pomo.mode==='focus' ? 'var(--accent)' : 'var(--good)'"
-                      stroke-width="7" stroke-linecap="round"
-                      :stroke-dasharray="2 * Math.PI * 52"
-                      :stroke-dashoffset="ringOffset"
-                      style="transition:stroke-dashoffset .95s linear"/>
-            </svg>
-            <div class="absolute inset-0 flex flex-col items-center justify-center">
-              <span class="mono text-[24px] font-semibold leading-none" x-text="mmss(pomo.remaining)"></span>
-              <span class="label !text-[9px] mt-1" x-text="pomo.mode==='focus' ? 'FOCUS' : 'BREAK'"></span>
-            </div>
-          </div>
-          <div class="flex-1 flex flex-col gap-2">
-            <button class="btn btn-accent justify-center" @click="pomoToggle()" x-text="pomo.running ? '일시정지' : '시작'"></button>
-            <button class="btn justify-center" @click="pomoReset()">리셋</button>
-            <div class="mono text-[11px] text-center mt-0.5" style="color:var(--ink-faint)">
-              완료 <span x-text="pomo.rounds"></span> 세션
-            </div>
-          </div>
-        </div>
-
-        <div class="flex flex-wrap items-center gap-1.5 mt-3 pt-3" style="border-top:1px solid var(--edge-soft)">
-          <button class="status" :data-on="pomoSound"
-                  @click="pomoSound = !pomoSound; if (pomoSound) { ensureAudio(); playChime('break'); }"
-                  title="세션 종료 비프음">
-            <span class="dot"></span>비프음
-          </button>
-          <button class="status" :data-on="pomoNotify"
-                  @click="pomoNotify ? (pomoNotify = false) : requestNotify()"
-                  title="세션 종료 시 브라우저 알림">
-            <span class="dot"></span>브라우저 알림
-          </button>
-        </div>
-      </section>
-
-      <!-- routine checklist -->
-      <section class="panel p-4">
-        <div class="flex items-center justify-between mb-3">
-          <h2 class="font-display text-[15px] font-semibold">일일 루틴</h2>
-          <span class="mono text-[11px]" style="color:var(--ink-faint)">
-            <span x-text="routines.filter(r=>r.done).length"></span>/<span x-text="routines.length"></span>
-          </span>
-        </div>
-        <div class="flex flex-col gap-1">
-          <template x-for="r in routines" :key="r.id">
-            <label class="flex items-center gap-2.5 py-1.5 px-1 rounded-md cursor-pointer" style="transition:background .12s" onmouseover="this.style.background='var(--panel-2)'" onmouseout="this.style.background='transparent'">
-              <input type="checkbox" class="chk" :checked="r.done" @change="r.done = !r.done" />
-              <span class="text-[12.5px]" :style="r.done ? 'color:var(--ink-faint);text-decoration:line-through' : ''" x-text="r.label"></span>
-            </label>
-          </template>
-        </div>
-        <button class="btn btn-ghost w-full justify-center mt-3 !text-[11.5px]" @click="resetDay()">오늘 진행 상태 초기화</button>
       </section>
 
       <p class="text-[10.5px] leading-relaxed px-1" style="color:var(--ink-faint)">

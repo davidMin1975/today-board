@@ -14,6 +14,7 @@
  *   TODO_DB             할일 DB ID
  *   SCHED_DB            일정 DB ID
  *   UNIFIED_WORK_DB     통합 업무 실행 DB ID (읽기 전용)
+ *                      진행상태=STATUS 속성, 업무구분=SELECT, 고객사/다음 행동 표시
  *   ALLOW_ORIGIN        대시보드 오리진 (CORS)
  */
 
@@ -24,10 +25,20 @@ const PRIO_TO_NOTION = { P1: '높음', P2: '보통', P3: '낮음' };
 const PRIO_FROM_NOTION = { 높음: 'P1', 보통: 'P2', 낮음: 'P3' };
 const STATUS_TO_NOTION = { todo: '해야 함', doing: '진행 중', done: '완료' };
 const STATUS_FROM_NOTION = { '해야 함': 'todo', '진행 중': 'doing', 대기: 'todo', 완료: 'done' };
-const UNIFIED_STATUS_FROM_NOTION = { '진행 중': 'doing', 대기: 'todo', 보류: 'todo', 완료: 'done' };
+const UNIFIED_STATUS_FROM_NOTION = { '진행 중': 'doing', 진행: 'doing', 대기: 'todo', '시작 전': 'todo', 보류: 'todo', 완료: 'done' };
 const FIELD_TO_CAT = { 법률: 'field', 업무: 'bid', 수영: 'life', 금융: 'life', 개인: 'life', 여행: 'life', 공부: 'dev' };
 const CAT_TO_FIELD = { bid: '업무', field: '업무', dev: '업무', life: '개인' };
-const WORK_TYPE_TO_CAT = { '납품·설치': 'field', 견적: 'bid', 제안: 'bid', 개발: 'dev', 자동화: 'dev', 교육: 'field' };
+// 통합 업무 실행 DB 의 실제 "업무구분" 값 → 대시보드 카테고리
+const WORK_TYPE_TO_CAT = {
+  '영업 후속': 'field',
+  '납품·설치': 'field',
+  '고객 회신': 'field',
+  '정산·증빙': 'bid',
+  '법률·행정': 'bid',
+  '내부 운영': 'dev',
+  // 레거시 값 호환
+  견적: 'bid', 제안: 'bid', 개발: 'dev', 자동화: 'dev', 교육: 'field',
+};
 const SCHED_TYPE_TO_CAT = {
   법원: 'field', 미팅: 'field', '서류 마감': 'bid', 강습: 'life', 여행: 'life',
   병원: 'life', 은행: 'life', '가족·기념일': 'life', 공휴일: 'life', 개인: 'life', 기타: 'dev',
@@ -65,6 +76,28 @@ async function notion(env, path, method, body) {
 }
 
 const plain = (rich) => (rich || []).map((t) => t.plain_text).join('').trim();
+
+// 속성 타입에 상관없이 사람이 읽을 수 있는 텍스트를 뽑아낸다.
+// (고객사·다음 행동 등이 rich_text / select / formula / rollup 어느 쪽이든 대응)
+function anyText(prop) {
+  if (!prop) return '';
+  switch (prop.type) {
+    case 'title': return plain(prop.title);
+    case 'rich_text': return plain(prop.rich_text);
+    case 'select': return prop.select?.name || '';
+    case 'status': return prop.status?.name || '';
+    case 'multi_select': return (prop.multi_select || []).map((s) => s.name).join(', ');
+    case 'people': return (prop.people || []).map((p) => p.name).filter(Boolean).join(', ');
+    case 'number': return prop.number != null ? String(prop.number) : '';
+    case 'formula':
+      return prop.formula?.string
+        || (prop.formula?.number != null ? String(prop.formula.number) : '')
+        || (prop.formula?.date?.start ? String(prop.formula.date.start).slice(0, 10) : '');
+    case 'rollup':
+      return (prop.rollup?.array || []).map((x) => anyText(x)).filter(Boolean).join(', ');
+    default: return '';
+  }
+}
 
 async function queryAll(env, dbId, filter, sorts) {
   const out = [];
@@ -108,18 +141,21 @@ function taskFromPage(p) {
 
 function unifiedWorkFromPage(p) {
   const P = p.properties || {};
-  const status = UNIFIED_STATUS_FROM_NOTION[P['진행상태']?.select?.name] || 'todo';
-  const workType = P['업무구분']?.select?.name || '';
+  // "진행상태" 는 Notion STATUS 속성이다 (SELECT 아님) → .status.name 으로 읽는다.
+  const status = UNIFIED_STATUS_FROM_NOTION[P['진행상태']?.status?.name] || 'todo';
+  const workType = anyText(P['업무구분']);
   return {
     notionId: p.id,
     notionUrl: p.url,
     title: plain(P['업무명']?.title) || '(제목 없음)',
     status,
     done: status === 'done',
-    prio: PRIO_FROM_NOTION[P['우선순위']?.select?.name] || 'P3',
+    prio: PRIO_FROM_NOTION[anyText(P['우선순위'])] || 'P3',
     due: P['마감일']?.date?.start ? String(P['마감일'].date.start).slice(0, 10) : '',
     cat: WORK_TYPE_TO_CAT[workType] || 'bid',
-    nextAction: plain(P['다음 행동']?.rich_text),
+    workType,
+    customer: anyText(P['고객사']),
+    nextAction: anyText(P['다음 행동']),
     notionReadOnly: true,
     source: 'unified-work',
   };
@@ -169,7 +205,7 @@ async function pull(env) {
     ? await optionalQueryAll(
       env,
       env.UNIFIED_WORK_DB,
-      { property: '진행상태', select: { does_not_equal: '완료' } },
+      { property: '진행상태', status: { does_not_equal: '완료' } },
       [{ property: '마감일', direction: 'ascending' }],
       '통합 업무 실행 DB',
     )
