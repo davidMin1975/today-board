@@ -1009,8 +1009,10 @@ document.addEventListener('alpine:init', () => {
 
         this.sync.lastAt = Date.now();
         this.saveSync();
+        const warnings = Array.isArray(gj.warnings) ? gj.warnings.filter(Boolean) : [];
         this.sync.status = `완료 ✓ ${new Date().toLocaleTimeString('ko-KR')} · 할일 ${(gj.tasks || []).length} · 일정 ${(gj.sched || []).length}` +
-          (applied.added ? ` · +${applied.added}` : '') + (applied.archived ? ` · 보관 ${applied.archived}` : '');
+          (applied.added ? ` · +${applied.added}` : '') + (applied.archived ? ` · 보관 ${applied.archived}` : '') +
+          (warnings.length ? ` · 주의: ${warnings.join(', ')}` : '');
       } catch (e) {
         this.sync.status = '실패: ' + (e.message || e);
         if (!opts.silent) console.error('syncNotion', e);

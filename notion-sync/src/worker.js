@@ -81,6 +81,15 @@ async function queryAll(env, dbId, filter, sorts) {
   return out;
 }
 
+async function optionalQueryAll(env, dbId, filter, sorts, label) {
+  try {
+    return { pages: await queryAll(env, dbId, filter, sorts), warning: '' };
+  } catch (e) {
+    // 선택 원본의 권한·스키마 문제는 기존 할일·일정 동기화를 중단시키지 않는다.
+    return { pages: [], warning: `${label} 접근 필요` };
+  }
+}
+
 function taskFromPage(p) {
   const P = p.properties || {};
   const status = STATUS_FROM_NOTION[P['상태']?.select?.name] || 'todo';
@@ -156,14 +165,15 @@ async function pull(env) {
     [{ property: '기한', direction: 'ascending' }],
   );
 
-  const unifiedWorkPages = env.UNIFIED_WORK_DB
-    ? await queryAll(
+  const unifiedWork = env.UNIFIED_WORK_DB
+    ? await optionalQueryAll(
       env,
       env.UNIFIED_WORK_DB,
       { property: '진행상태', select: { does_not_equal: '완료' } },
       [{ property: '마감일', direction: 'ascending' }],
+      '통합 업무 실행 DB',
     )
-    : [];
+    : { pages: [], warning: '' };
 
   const schedPages = await queryAll(
     env,
@@ -181,8 +191,9 @@ async function pull(env) {
   );
 
   return {
-    tasks: [...todoPages.map(taskFromPage), ...unifiedWorkPages.map(unifiedWorkFromPage)],
+    tasks: [...todoPages.map(taskFromPage), ...unifiedWork.pages.map(unifiedWorkFromPage)],
     sched: schedPages.map(schedFromPage),
+    warnings: unifiedWork.warning ? [unifiedWork.warning] : [],
     pulledAt: new Date().toISOString(),
   };
 }
