@@ -13,6 +13,7 @@
  * 변수 (wrangler.toml [vars])
  *   TODO_DB             할일 DB ID
  *   SCHED_DB            일정 DB ID
+ *   UNIFIED_WORK_DB     통합 업무 실행 DB ID (읽기 전용)
  *   ALLOW_ORIGIN        대시보드 오리진 (CORS)
  */
 
@@ -23,8 +24,10 @@ const PRIO_TO_NOTION = { P1: '높음', P2: '보통', P3: '낮음' };
 const PRIO_FROM_NOTION = { 높음: 'P1', 보통: 'P2', 낮음: 'P3' };
 const STATUS_TO_NOTION = { todo: '해야 함', doing: '진행 중', done: '완료' };
 const STATUS_FROM_NOTION = { '해야 함': 'todo', '진행 중': 'doing', 대기: 'todo', 완료: 'done' };
+const UNIFIED_STATUS_FROM_NOTION = { '진행 중': 'doing', 대기: 'todo', 보류: 'todo', 완료: 'done' };
 const FIELD_TO_CAT = { 법률: 'field', 업무: 'bid', 수영: 'life', 금융: 'life', 개인: 'life', 여행: 'life', 공부: 'dev' };
 const CAT_TO_FIELD = { bid: '업무', field: '업무', dev: '업무', life: '개인' };
+const WORK_TYPE_TO_CAT = { '납품·설치': 'field', 견적: 'bid', 제안: 'bid', 개발: 'dev', 자동화: 'dev', 교육: 'field' };
 const SCHED_TYPE_TO_CAT = {
   법원: 'field', 미팅: 'field', '서류 마감': 'bid', 강습: 'life', 여행: 'life',
   병원: 'life', 은행: 'life', '가족·기념일': 'life', 공휴일: 'life', 개인: 'life', 기타: 'dev',
@@ -94,6 +97,25 @@ function taskFromPage(p) {
   };
 }
 
+function unifiedWorkFromPage(p) {
+  const P = p.properties || {};
+  const status = UNIFIED_STATUS_FROM_NOTION[P['진행상태']?.select?.name] || 'todo';
+  const workType = P['업무구분']?.select?.name || '';
+  return {
+    notionId: p.id,
+    notionUrl: p.url,
+    title: plain(P['업무명']?.title) || '(제목 없음)',
+    status,
+    done: status === 'done',
+    prio: PRIO_FROM_NOTION[P['우선순위']?.select?.name] || 'P3',
+    due: P['마감일']?.date?.start ? String(P['마감일'].date.start).slice(0, 10) : '',
+    cat: WORK_TYPE_TO_CAT[workType] || 'bid',
+    nextAction: plain(P['다음 행동']?.rich_text),
+    notionReadOnly: true,
+    source: 'unified-work',
+  };
+}
+
 function schedFromPage(p) {
   const P = p.properties || {};
   return {
@@ -134,6 +156,15 @@ async function pull(env) {
     [{ property: '기한', direction: 'ascending' }],
   );
 
+  const unifiedWorkPages = env.UNIFIED_WORK_DB
+    ? await queryAll(
+      env,
+      env.UNIFIED_WORK_DB,
+      { property: '진행상태', select: { does_not_equal: '완료' } },
+      [{ property: '마감일', direction: 'ascending' }],
+    )
+    : [];
+
   const schedPages = await queryAll(
     env,
     env.SCHED_DB,
@@ -150,7 +181,7 @@ async function pull(env) {
   );
 
   return {
-    tasks: todoPages.map(taskFromPage),
+    tasks: [...todoPages.map(taskFromPage), ...unifiedWorkPages.map(unifiedWorkFromPage)],
     sched: schedPages.map(schedFromPage),
     pulledAt: new Date().toISOString(),
   };

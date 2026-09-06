@@ -7,6 +7,8 @@ workers_dev = true
 # 할일 DB / 일정 DB ID (시크릿 아님 — 공개돼도 무방)
 TODO_DB = "a3f4897d-7022-475e-bfc7-3ff20a2c6a3a"
 SCHED_DB = "86fccaac-3fc6-49fa-8089-dcfed6e8fb53"
+# 통합 업무 실행 DB는 Today Board에 읽기 전용으로 표시한다.
+UNIFIED_WORK_DB = "543f140a-2ab8-4dc9-bade-e46bbddcf4e0"
 # 대시보드 오리진 (CORS 허용 대상). 커스텀 도메인 쓰면 변경.
 ALLOW_ORIGIN = "https://davidmin1975.github.io"
 

@@ -980,7 +980,7 @@ document.addEventListener('alpine:init', () => {
         // 1) PUSH — 첫 동기화가 아니면 로컬 변경을 Notion으로 올림
         if (!first) {
           const updates = this.tasks
-            .filter(t => t.notionId && !t.notionSched)
+            .filter(t => t.notionId && !t.notionSched && !t.notionReadOnly)
             .map(t => ({ notionId: t.notionId, status: t.status || (t.done ? 'done' : 'todo'), prio: t.prio, due: t.due || '' }));
           const creates = this.tasks
             .filter(t => !t.notionId && !t.notionSched && !t.localOnly)
@@ -1033,13 +1033,14 @@ document.addEventListener('alpine:init', () => {
             t.due = n.due || '';
             t.cat = n.cat;
             t.notionUrl = n.notionUrl;
+            t.notionReadOnly = !!n.notionReadOnly;
             if (!isSched && n.status && n.status !== t.status) this.setStatus(t, n.status);
           } else {
             this.tasks.push({
               id: this.uid(), title: n.title, cat: n.cat, prio: n.prio,
               done: !!n.done, due: n.due || '', status: n.status || 'todo',
               archived: false, completedAt: n.done ? Date.now() : null, createdAt: Date.now(),
-              notionId: n.notionId, notionUrl: n.notionUrl, notionSched: !!isSched,
+              notionId: n.notionId, notionUrl: n.notionUrl, notionSched: !!isSched, notionReadOnly: !!n.notionReadOnly,
             });
             added++;
           }
