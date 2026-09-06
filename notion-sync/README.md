@@ -23,10 +23,13 @@ Today Board 대시보드와 Notion(`할일 DB`, `일정 DB`)을 **양방향 동�
    - 이름: `Today Board Sync`, 워크스페이스 선택
    - Capabilities: **Read content**, **Update content**, **Insert content** 체크
 2. 발급된 **Internal Integration Secret**(`ntn_...`) 복사 — 잠시 뒤 사용
-3. Notion에서 **할일 DB** 페이지 열기 → 우상단 `···` → **Connections** → `Today Board Sync` 추가
-4. **일정 DB** 페이지에도 동일하게 연결 추가
+3. 아래 **3개 DB 모두**에 이 통합을 연결해야 한다. 각 DB 페이지 → 우상단 `···` → **연결(Connections)** → 통합 선택 → **페이지에 추가**
+   - **할일 DB** (`a3f4897d…`)
+   - **일정 DB** (`86fccaac…`)
+   - **✅ 통합 업무 실행 DB** (`543f140a…`) ← 업무 보드의 원본. 빠지면 pull 시 404 → 보드에 업무 0건.
 
 > DB ID는 `wrangler.toml`에 이미 넣어놨습니다. DB가 다르면 URL의 32자리 hex로 교체하세요.
+> 현재 운영 중인 통합 이름은 **`견적서 자동화`** 이며, 위 3개 DB에 연결돼 있어야 정상 동작한다.
 
 ## 2. 배포
 
