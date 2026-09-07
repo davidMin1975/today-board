@@ -1,12 +1,14 @@
 /* Today Board — Service Worker
  * 캐시 전략
- *  - 정적 자산(index.html, manifest, icon 등) + 허용된 CDN(Tailwind / Alpine / Google Fonts): Cache-First
+ *  - 네비게이션(문서/HTML) 요청: Network-First — 항상 최신 배포본을 먼저 시도하고,
+ *    네트워크 실패(오프라인) 시에만 캐시된 index.html 로 폴백. 공개 페이지에 구버전이
+ *    남는 문제를 막기 위한 전략입니다.
+ *  - 그 외 정적 자산(mobile.css, manifest, icon 등) + 허용된 CDN(Tailwind / Alpine / Google Fonts): Cache-First
  *  - 그 외 도메인(예: api.telegram.org): SW 미개입 → 항상 네트워크 (오프라인이면 자연스럽게 실패)
- *  - 네비게이션 요청이 오프라인으로 실패하면 캐시된 index.html 로 폴백
  *
  * 배포/수정 후 캐시를 강제로 갱신하려면 아래 VERSION 값을 올리세요.
  */
-const VERSION = 'today-board-v8-mobile';
+const VERSION = 'today-board-v9-netfirst';
 const PRECACHE = VERSION + '-precache';
 const RUNTIME  = VERSION + '-runtime';
 
@@ -82,6 +84,30 @@ self.addEventListener('fetch', (event) => {
   const allowedCdn = RUNTIME_HOSTS.includes(url.hostname);
   if (!sameOrigin && !allowedCdn) return; // 그 외 도메인은 브라우저 기본 처리에 위임
 
+  // 네비게이션(문서) 요청: Network-First — 항상 최신본을 먼저 시도
+  const isNavigation = req.mode === 'navigate' ||
+    (sameOrigin && (url.pathname === '/' || url.pathname.endsWith('/') || url.pathname.endsWith('/index.html')));
+
+  if (isNavigation) {
+    event.respondWith(
+      fetch(req)
+        .then((resp) => {
+          if (resp && resp.ok) {
+            const copy = resp.clone();
+            caches.open(RUNTIME).then((c) => c.put(req, copy));
+          }
+          return resp;
+        })
+        .catch(() =>
+          caches.match(req).then((cached) =>
+            cached || caches.match('./index.html').then((h) => h || caches.match('./'))
+          )
+        )
+    );
+    return;
+  }
+
+  // 그 외 정적 자산 / 허용 CDN: Cache-First
   event.respondWith(
     caches.match(req).then((cached) => {
       if (cached) return cached;
@@ -94,12 +120,7 @@ self.addEventListener('fetch', (event) => {
           }
           return resp;
         })
-        .catch(() => {
-          if (req.mode === 'navigate') {
-            return caches.match('./index.html').then((h) => h || caches.match('./'));
-          }
-          return cached; // undefined → 네트워크 오류 그대로 전달
-        });
+        .catch(() => cached); // undefined → 네트워크 오류 그대로 전달
     })
   );
 });
