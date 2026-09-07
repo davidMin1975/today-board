@@ -6,7 +6,7 @@
  *
  * 배포/수정 후 캐시를 강제로 갱신하려면 아래 VERSION 값을 올리세요.
  */
-const VERSION = 'today-board-v7';
+const VERSION = 'today-board-v8-mobile';
 const PRECACHE = VERSION + '-precache';
 const RUNTIME  = VERSION + '-runtime';
 
@@ -14,6 +14,7 @@ const RUNTIME  = VERSION + '-runtime';
 const CORE = [
   './',
   './index.html',
+  './mobile.css',
   './manifest.webmanifest',
   './icon.svg',
   './icon-192.png',

@@ -1,0 +1,164 @@
+/* Today Board — mobile usability layer
+ * 이 파일은 index.html의 기존 CSS를 건드리지 않고
+ * 모바일(≤767px) 사용성만 별도로 보강하는 오버레이입니다.
+ * 데스크톱(≥1024px) 레이아웃/기능에는 영향을 주지 않습니다.
+ */
+
+@media (max-width: 767px) {
+  html, body { overflow-x: hidden; }
+  body {
+    font-size: 14px;
+    padding-bottom: calc(76px + env(safe-area-inset-bottom));
+  }
+
+  [x-data="board"] {
+    width: 100%;
+    max-width: 100%;
+    padding-left: 10px !important;
+    padding-right: 10px !important;
+    padding-top: 10px !important;
+  }
+
+  .panel { border-radius: 12px; }
+
+  header.panel {
+    padding: 14px !important;
+    margin-bottom: 10px !important;
+  }
+
+  #goal {
+    min-height: 44px;
+    font-size: 15px !important;
+  }
+
+  .btn, .status, .seg button, .field, .due, .acc-head {
+    min-height: 42px;
+  }
+
+  .btn {
+    justify-content: center;
+    padding: 9px 12px;
+    font-size: 13px;
+  }
+
+  .seg {
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .seg::-webkit-scrollbar { display: none; }
+  .seg button {
+    flex: 1 0 auto;
+    padding: 8px 12px;
+  }
+
+  section.panel { padding: 12px !important; }
+
+  select.field,
+  input.field,
+  input[type="date"].field {
+    width: 100% !important;
+    min-width: 0 !important;
+    font-size: 16px !important;
+  }
+
+  form.flex.flex-wrap.gap-2 {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px !important;
+    padding: 10px !important;
+  }
+
+  form.flex.flex-wrap.gap-2 > input:first-child,
+  form.flex.flex-wrap.gap-2 > input[type="date"],
+  form.flex.flex-wrap.gap-2 > button[type="submit"] {
+    grid-column: 1 / -1;
+  }
+
+  .card {
+    padding: 12px;
+    gap: 9px;
+    border-radius: 11px;
+    touch-action: manipulation;
+  }
+
+  .card-title {
+    font-size: 14px !important;
+    line-height: 1.45 !important;
+    overflow-wrap: anywhere;
+  }
+
+  .card .chk {
+    width: 20px;
+    height: 20px;
+  }
+
+  /* hover에서만 보이던 삭제/보관 버튼(카드·목록·보관함 공통)을 터치 환경에서 항상 노출 */
+  .opacity-0 {
+    opacity: .72 !important;
+  }
+
+  .qlink {
+    min-height: 64px;
+    padding: 12px;
+  }
+
+  .net-dock {
+    left: 10px;
+    right: 10px;
+    bottom: calc(10px + env(safe-area-inset-bottom));
+    align-items: stretch;
+    pointer-events: none;
+  }
+
+  .net-badge {
+    width: fit-content;
+    max-width: 100%;
+    min-height: 40px;
+    pointer-events: auto;
+  }
+
+  [role="dialog"] {
+    max-height: calc(100dvh - 24px);
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+@media (max-width: 390px) {
+  [x-data="board"] {
+    padding-left: 7px !important;
+    padding-right: 7px !important;
+  }
+
+  form.flex.flex-wrap.gap-2 {
+    grid-template-columns: 1fr;
+  }
+
+  form.flex.flex-wrap.gap-2 > * {
+    grid-column: 1 / -1 !important;
+  }
+}
+
+@media (hover: none) and (pointer: coarse) {
+  /* 767px 초과 터치 기기(태블릿 등)에서도 hover 전용 버튼이 가려지지 않도록 */
+  .opacity-0 {
+    opacity: .72 !important;
+  }
+
+  .btn:hover,
+  .card:hover,
+  .qlink:hover,
+  .status:hover,
+  .acc-head:hover {
+    filter: none;
+  }
+
+  .btn:active,
+  .qlink:active,
+  .status:active,
+  .seg button:active {
+    transform: scale(.985);
+  }
+}
