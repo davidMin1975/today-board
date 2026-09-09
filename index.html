@@ -276,9 +276,6 @@
 <script>
 document.addEventListener('alpine:init', () => {
   Alpine.data('board', () => ({
-    now: new Date(),
-    _iv: null,
-
     goal: '○○청 통합관제 제안서 초안 마감 + △△제작소 현장 실사',
     goalSuggest: '',
     view: 'kanban',
@@ -336,7 +333,8 @@ document.addEventListener('alpine:init', () => {
       } else {
         this.seed();
       }
-      this.migrate();
+      const removedLegacy = this.migrate();
+      if (removedLegacy) this.save();
       // 보드 재구성(구역 보기·통합 업무 동기화) 1회 마이그레이션: 낡은 필터/보기 상태 정리
       try {
         if (localStorage.getItem('today-board.migrated') !== 'v2') {
@@ -360,14 +358,16 @@ document.addEventListener('alpine:init', () => {
         setTimeout(() => this.syncNotion({ silent: true }), 1500);
       }
 
-      this._iv = setInterval(() => { this.now = new Date(); }, 1000);
-
       ['goal', 'view', 'fPrio', 'fCat', 'sort', 'kanbanGroup', 'showDone', 'tasks', 'systems', 'links']
         .forEach(k => this.$watch(k, () => this.save()));
     },
 
     migrate() {
       const base = Date.now() - this.tasks.length * 1000;
+      const legacyRoutineTitles = new Set(['수영 1km / 킥판 200m', '물 2L · 스트레칭 10분']);
+      const before = this.tasks.length;
+      // 기존 로컬 시드에만 있던 루틴 카드는 업무 보드에서 제거한다. Notion 원본은 건드리지 않는다.
+      this.tasks = this.tasks.filter((t) => t.notionId || !legacyRoutineTitles.has(String(t.title || '').trim()));
       this.tasks.forEach((t, i) => {
         if (!t.status) t.status = t.done ? 'done' : 'todo';
         if (t.done && t.status !== 'done') t.status = 'done';
@@ -381,6 +381,7 @@ document.addEventListener('alpine:init', () => {
         if (typeof l.icon !== 'string') l.icon = '';
         if (!l.id) l.id = this.uid();
       });
+      return before !== this.tasks.length;
     },
 
     seed() {
@@ -398,8 +399,6 @@ document.addEventListener('alpine:init', () => {
         mk({ title: '방문 결과 영업일지 CRM 입력',          cat: 'field', prio: 'P3', due: plus(1) }),
         mk({ title: '수집 봇 야간 배치 실패 로그 원인 확인', cat: 'dev',   prio: 'P2', due: t,       status: 'doing' }),
         mk({ title: '대시보드 알림 웹훅 재연결 및 테스트',   cat: 'dev',   prio: 'P3' }),
-        mk({ title: '수영 1km / 킥판 200m',                 cat: 'life',  prio: 'P2' }),
-        mk({ title: '물 2L · 스트레칭 10분',                cat: 'life',  prio: 'P3' }),
       ];
     },
 
@@ -519,13 +518,9 @@ document.addEventListener('alpine:init', () => {
     catMeta(id) { return this.cats.find(c => c.id === id) || { label: id, short: '', color: 'var(--edge)' }; },
 
     fmtDate() {
-      const d = this.now;
+      const d = new Date();
       const wd = ['일', '월', '화', '수', '목', '금', '토'][d.getDay()];
       return `${d.getFullYear()}년 ${d.getMonth() + 1}월 ${d.getDate()}일 ${wd}요일`;
-    },
-    fmtClock() {
-      const d = this.now, p = (n) => String(n).padStart(2, '0');
-      return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
     },
 
     /* ---------- tasks ---------- */
@@ -1049,10 +1044,6 @@ document.addEventListener('alpine:init', () => {
         <div class="label mb-1.5">Today Board</div>
         <div class="flex items-baseline gap-3 flex-wrap">
           <span class="font-display text-[26px] sm:text-[30px] leading-none font-semibold tracking-tight" x-text="fmtDate()"></span>
-        </div>
-        <div class="mono text-[15px] mt-1.5" style="color:var(--ink-dim)">
-          <span x-text="fmtClock()"></span>
-          <span class="ml-2" style="color:var(--ink-faint)">KST</span>
         </div>
       </div>
 
