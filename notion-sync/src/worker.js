@@ -162,11 +162,16 @@ function unifiedWorkFromPage(p) {
   };
 }
 
-// "오늘의 한 줄 목표" 자동 제안: 브리핑 포함 + P1 + 미완료, 마감 빠른 순 상위 3건
+// "오늘의 한 줄 목표" 자동 제안: 브리핑 포함 + 미완료, 우선순위(긴급→보통→낮음) 우선 · 동순위는 마감 빠른 순, 상위 3건
+const PRIO_RANK = { P1: 0, P2: 1, P3: 2 };
 function briefingGoal(items) {
   const picked = items
-    .filter((t) => t.briefing && t.prio === 'P1' && t.status !== 'done')
-    .sort((a, b) => String(a.due || '9999-99-99').localeCompare(String(b.due || '9999-99-99')))
+    .filter((t) => t.briefing && t.status !== 'done')
+    .sort((a, b) => {
+      const pr = (PRIO_RANK[a.prio] ?? 9) - (PRIO_RANK[b.prio] ?? 9);
+      if (pr !== 0) return pr;
+      return String(a.due || '9999-99-99').localeCompare(String(b.due || '9999-99-99'));
+    })
     .slice(0, 3);
   return picked.map((t) => ({ title: t.title, customer: t.customer, due: t.due, notionUrl: t.notionUrl }));
 }

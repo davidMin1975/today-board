@@ -992,7 +992,7 @@ document.addEventListener('alpine:init', () => {
       }
     },
     statusLabel(s) { return s === 'doing' ? '진행 중' : s === 'done' ? '완료' : '진행 전'; },
-    // 브리핑 P1 업무 → "오늘의 한 줄 목표" 제안 문자열 (고객사 우선, 없으면 업무명)
+    // 브리핑 포함 업무(우선순위 긴급→보통→낮음 순) → "오늘의 한 줄 목표" 제안 문자열 (고객사 우선, 없으면 업무명)
     _composeGoal(list) {
       if (!Array.isArray(list) || !list.length) return '';
       const short = (t) => {
@@ -1080,7 +1080,7 @@ document.addEventListener('alpine:init', () => {
                  x-model="goal" placeholder="오늘 반드시 끝낼 한 가지를 적으세요" />
         </div>
         <div x-show="goalSuggest && goalSuggest !== goal" x-cloak class="flex items-center gap-2 mt-1.5 flex-wrap pl-[11px]">
-          <span class="text-[10.5px]" style="color:var(--ink-faint)">💡 브리핑 P1</span>
+          <span class="text-[10.5px]" style="color:var(--ink-faint)">💡 브리핑 제안</span>
           <span class="text-[11px]" style="color:var(--ink-dim)" x-text="goalSuggest"></span>
           <button class="btn btn-ghost !px-2 !py-0.5 !text-[10px]" @click="goal = goalSuggest">목표로 적용</button>
         </div>
