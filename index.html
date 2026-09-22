@@ -545,7 +545,7 @@ document.addEventListener('alpine:init', () => {
       else { t.completedAt = null; t.archived = false; }
     },
     toggleTask(t) {
-      if (t.notionReadOnly) return; // 통합 업무 실행 DB 등 읽기 전용 원본은 보드에서 변경하지 않음
+      if (t.notionSched) return; // 일정 항목은 완료 처리 대상이 아님
       this.setStatus(t, t.done ? 'todo' : 'done');
     },
 
@@ -941,8 +941,11 @@ document.addEventListener('alpine:init', () => {
         // 1) PUSH — 첫 동기화가 아니면 로컬 변경을 Notion으로 올림
         if (!first) {
           const updates = this.tasks
-            .filter(t => t.notionId && !t.notionSched && !t.notionReadOnly)
-            .map(t => ({ notionId: t.notionId, status: t.status || (t.done ? 'done' : 'todo'), prio: t.prio, due: t.due || '' }));
+            .filter(t => t.notionId && !t.notionSched)
+            .map(t => t.notionReadOnly
+              // 통합 업무 실행 DB 등 읽기 전용 원본은 완료 체크(진행상태)만 반영, 우선순위·기한은 보드에서 건드리지 않음
+              ? { notionId: t.notionId, source: t.source || 'unified-work', status: t.status || (t.done ? 'done' : 'todo') }
+              : { notionId: t.notionId, status: t.status || (t.done ? 'done' : 'todo'), prio: t.prio, due: t.due || '' });
           const creates = this.tasks
             .filter(t => !t.notionId && !t.notionSched && !t.localOnly)
             .map(t => ({ tempId: t.id, title: t.title, status: t.status || (t.done ? 'done' : 'todo'), prio: t.prio, due: t.due || '', cat: t.cat }));
@@ -1204,7 +1207,7 @@ document.addEventListener('alpine:init', () => {
                      :style="`--_cat:${catMeta(t.cat).color}`"
                      @dragstart="dragStart(t.id, $event)" @dragend="dragEnd()">
                   <div class="flex items-start gap-2.5">
-                    <input type="checkbox" class="chk mt-0.5" :checked="t.done" :disabled="t.notionReadOnly" @change="toggleTask(t)" />
+                    <input type="checkbox" class="chk mt-0.5" :checked="t.done" :disabled="t.notionSched" @change="toggleTask(t)" />
                     <span class="card-title text-[12.5px] leading-snug flex-1" x-text="t.title"></span>
                     <button x-show="!t.notionReadOnly" class="opacity-0 group-hover:opacity-100 transition" style="color:var(--ink-faint)" @click="removeTask(t.id)" title="삭제">
                       <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M3 3l6 6M9 3l-6 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
@@ -1251,7 +1254,7 @@ document.addEventListener('alpine:init', () => {
         <template x-for="t in listTasks()" :key="t.id">
           <div class="card group" :data-done="t.done" :style="`--_cat:${catMeta(t.cat).color}`">
             <div class="flex flex-row items-center">
-              <input type="checkbox" class="chk" :checked="t.done" :disabled="t.notionReadOnly" @change="toggleTask(t)" />
+              <input type="checkbox" class="chk" :checked="t.done" :disabled="t.notionSched" @change="toggleTask(t)" />
               <span class="card-title text-[12.5px] flex-1 ml-2.5" x-text="t.title"></span>
               <span class="prio mr-2" :style="`color:${prioColor(t.prio)}`" x-text="t.prio"></span>
               <span x-show="t.workType" x-cloak class="chip mr-2 hidden sm:inline-flex !text-[9.5px]" x-text="t.workType"></span>

@@ -26,6 +26,7 @@ const PRIO_FROM_NOTION = { 높음: 'P1', 보통: 'P2', 낮음: 'P3' };
 const STATUS_TO_NOTION = { todo: '해야 함', doing: '진행 중', done: '완료' };
 const STATUS_FROM_NOTION = { '해야 함': 'todo', '진행 중': 'doing', 대기: 'todo', 완료: 'done' };
 const UNIFIED_STATUS_FROM_NOTION = { '진행 중': 'doing', 진행: 'doing', 대기: 'todo', '시작 전': 'todo', 보류: 'todo', 완료: 'done' };
+const UNIFIED_STATUS_TO_NOTION = { todo: '시작 전', doing: '진행 중', done: '완료' };
 const FIELD_TO_CAT = { 법률: 'field', 업무: 'bid', 수영: 'life', 금융: 'life', 개인: 'life', 여행: 'life', 공부: 'dev' };
 const CAT_TO_FIELD = { bid: '업무', field: '업무', dev: '업무', life: '개인' };
 // 통합 업무 실행 DB 의 실제 "업무구분" 값 → 대시보드 카테고리
@@ -257,6 +258,14 @@ async function push(env, payload) {
 
   for (const u of payload.updates || []) {
     try {
+      // 통합 업무 실행 DB(읽기 전용 원본)는 "진행상태"(STATUS 속성)만 보드 체크에서 반영
+      if (u.source === 'unified-work') {
+        const props = {};
+        if (u.status) props['진행상태'] = { status: { name: UNIFIED_STATUS_TO_NOTION[u.status] || '시작 전' } };
+        await notion(env, `/pages/${u.notionId}`, 'PATCH', { properties: props });
+        res.updated.push(u.notionId);
+        continue;
+      }
       const props = {};
       if (u.status) props['상태'] = { select: { name: STATUS_TO_NOTION[u.status] || '해야 함' } };
       if (u.prio) props['우선순위'] = { select: { name: PRIO_TO_NOTION[u.prio] || '보통' } };
