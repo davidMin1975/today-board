@@ -323,6 +323,7 @@ document.addEventListener('alpine:init', () => {
     backup: { open: false, tab: 'export', text: '', paste: '', copied: false, error: '' },
     tg: { token: '', chat: '', status: '', sending: false },
     sync: { url: '', key: '', auto: false, busy: false, status: '', lastAt: null, lastOk: null, state: 'idle' },
+    setupLinkApplied: false,
 
     /* ---------- lifecycle ---------- */
     init() {
@@ -348,6 +349,7 @@ document.addEventListener('alpine:init', () => {
       } catch (e) {}
       this.loadTg();
       this.loadSync();
+      this.applySetupLink();
 
       this.online = navigator.onLine;
       window.addEventListener('online', () => { this.online = true; });
@@ -887,6 +889,28 @@ document.addEventListener('alpine:init', () => {
         }
       } catch (e) {}
       this.sync.state = this.sync.url ? (this.sync.lastOk ? 'ok' : 'idle') : 'idle';
+    },
+    // 다른 기기(주로 폰)에서 URL 하나로 동기화 설정을 자동 적용.
+    // ?wurl=<Worker URL>&wkey=<Sync Key> 로 접속하면 저장 후 주소창에서 즉시 지운다.
+    applySetupLink() {
+      let u;
+      try { u = new URL(location.href); } catch (e) { return; }
+      const wurl = u.searchParams.get('wurl');
+      if (!wurl) return;
+      const wkey = u.searchParams.get('wkey') || '';
+      this.sync.url = wurl.trim();
+      this.sync.key = wkey.trim();
+      this.sync.auto = true;
+      this.sync.lastAt = null;
+      this.sync.lastOk = null;
+      this.saveSync();
+      this.setupLinkApplied = true;
+      try {
+        u.searchParams.delete('wurl');
+        u.searchParams.delete('wkey');
+        const clean = u.pathname + (u.search || '') + u.hash;
+        history.replaceState({}, '', clean);
+      } catch (e) {}
     },
     saveSync() {
       try {
@@ -1459,6 +1483,9 @@ document.addEventListener('alpine:init', () => {
 
   <!-- ===== NETWORK / SW STATUS ===== -->
   <div class="net-dock" x-cloak>
+    <div x-show="setupLinkApplied" x-transition class="net-badge" style="border-color:var(--good);color:var(--good)" role="status" aria-live="polite">
+      <span class="dot" style="background:var(--good);animation:none"></span>설정 링크로 이 기기에 동기화 연결됨
+    </div>
     <div x-show="!online" x-transition class="net-badge" role="status" aria-live="polite">
       <span class="dot"></span>오프라인 모드 · 로컬에 저장 중
     </div>
