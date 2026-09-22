@@ -16,6 +16,9 @@
  *   UNIFIED_WORK_DB     통합 업무 실행 DB ID (읽기 전용)
  *                      진행상태=STATUS 속성, 업무구분=SELECT, 고객사/다음 행동 표시
  *   ALLOW_ORIGIN        대시보드 오리진 (CORS)
+ *   EXCLUDED_PROJECT_IDS (선택, 콤마 구분) 할일 DB의 "업무 프로젝트" 관계가 이 프로젝트
+ *                      페이지 ID를 가리키면 대시보드에서 제외한다(개인/행정 준비 프로젝트 등
+ *                      브리핑에는 이미 나오지 않는 항목을 대시보드에서도 동일하게 숨기기 위함).
  */
 
 const NOTION = 'https://api.notion.com/v1';
@@ -200,20 +203,39 @@ async function pull(env) {
   const recent = new Date(Date.now() - 3 * 86400000).toISOString().slice(0, 10);
 
   // 진행 중인 할일 + 최근(기한 3일 이내) 완료 건만. 오래된 완료 건은 Notion에만 두고 대시보드로 내려보내지 않음.
+  // [2026-09-23] 법인 설립 준비(개인 행정 프로젝트) 관련 할일은 브리핑(아침/저녁)에서 이미
+  // 제외돼 왔으나 대시보드에는 필터가 없어 그대로 노출되던 불일치를 여기서 맞춘다.
+  // EXCLUDED_PROJECT_IDS(콤마 구분, 없으면 미필터)에 걸린 "업무 프로젝트" 관계를 가진 할일은 제외.
+  const excludedProjectIds = (env.EXCLUDED_PROJECT_IDS || '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const todoStatusFilter = {
+    or: [
+      { property: '상태', select: { does_not_equal: '완료' } },
+      {
+        and: [
+          { property: '상태', select: { equals: '완료' } },
+          { property: '기한', date: { on_or_after: recent } },
+        ],
+      },
+    ],
+  };
+  const todoFilter = excludedProjectIds.length
+    ? {
+      and: [
+        todoStatusFilter,
+        ...excludedProjectIds.map((id) => ({
+          property: '업무 프로젝트',
+          relation: { does_not_contain: id },
+        })),
+      ],
+    }
+    : todoStatusFilter;
   const todoPages = await queryAll(
     env,
     env.TODO_DB,
-    {
-      or: [
-        { property: '상태', select: { does_not_equal: '완료' } },
-        {
-          and: [
-            { property: '상태', select: { equals: '완료' } },
-            { property: '기한', date: { on_or_after: recent } },
-          ],
-        },
-      ],
-    },
+    todoFilter,
     [{ property: '기한', direction: 'ascending' }],
   );
 

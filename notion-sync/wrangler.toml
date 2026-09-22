@@ -11,6 +11,9 @@ SCHED_DB = "86fccaac-3fc6-49fa-8089-dcfed6e8fb53"
 UNIFIED_WORK_DB = "543f140a-2ab8-4dc9-bade-e46bbddcf4e0"
 # 대시보드 오리진 (CORS 허용 대상). 커스텀 도메인 쓰면 변경.
 ALLOW_ORIGIN = "https://davidmin1975.github.io"
+# [2026-09-23] "법인 설립 준비" 프로젝트(📁 업무 프로젝트 DB)에 연결된 할일은 대시보드에서 제외.
+# 아침/저녁 브리핑에는 이미 나오지 않던 항목이라 대시보드와 표기를 통일하기 위함.
+EXCLUDED_PROJECT_IDS = "3b46f832-1912-816c-a315-ccc95b3ceac2"
 
 # ── 시크릿은 wrangler로 별도 등록 (wrangler.toml 에 넣지 말 것) ──
 #   npx wrangler secret put NOTION_TOKEN   ← Notion 내부 통합 토큰 (필수)
