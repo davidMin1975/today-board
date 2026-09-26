@@ -239,11 +239,27 @@ async function pull(env) {
     [{ property: '기한', direction: 'ascending' }],
   );
 
+  // [2026-09-26] 통합 업무 실행 DB에도 할일 DB와 같은 EXCLUDED_PROJECT_IDS 필터를 적용한다.
+  // 지금은 이 DB에 법인 설립 준비 관련 행이 없어 눈에 띄는 차이가 없지만, 필터가 한쪽에만
+  // 있으면 새 행이 생기는 순간 대시보드·브리핑이 다시 어긋난다(2026-09-23 할일 DB 불일치와
+  // 같은 유형 — briefing-dashboard-display-parity 메모 참고).
+  const unifiedWorkStatusFilter = { property: '진행상태', status: { does_not_equal: '완료' } };
+  const unifiedWorkFilter = excludedProjectIds.length
+    ? {
+      and: [
+        unifiedWorkStatusFilter,
+        ...excludedProjectIds.map((id) => ({
+          property: '업무 프로젝트',
+          relation: { does_not_contain: id },
+        })),
+      ],
+    }
+    : unifiedWorkStatusFilter;
   const unifiedWork = env.UNIFIED_WORK_DB
     ? await optionalQueryAll(
       env,
       env.UNIFIED_WORK_DB,
-      { property: '진행상태', status: { does_not_equal: '완료' } },
+      unifiedWorkFilter,
       [{ property: '마감일', direction: 'ascending' }],
       '통합 업무 실행 DB',
     )
